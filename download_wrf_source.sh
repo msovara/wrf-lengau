@@ -24,10 +24,6 @@ echo ""
 echo "Creating build directory..."
 mkdir -p ${BUILD_DIR}
 
-# Create directories
-echo "Creating build directory..."
-mkdir -p ${BUILD_DIR}
-
 # Check if source already exists
 if [ -d "${BUILD_DIR}/WRF" ]; then
     echo "✓ WRF source code already exists at ${BUILD_DIR}/WRF"
