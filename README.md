@@ -24,21 +24,23 @@ Comprehensive installation guide and scripts for building and installing **WRF (
 
 ## 🎯 Overview
 
-This repository provides automated installation scripts for WRF v4.7.1 on the Lengau HPC cluster. The installation process handles:
+This repository provides automated installation scripts for **WRF v4.7.1** and **WPS v4.7.1** on the Lengau HPC cluster. The installation process handles:
 
 - **Compiler Compatibility**: Intel Parallel Studio XE 2016 with GCC 4.8.5 via MPI wrappers
 - **Dependency Management**: NetCDF, HDF5, Intel MPI
 - **Network Constraints**: Separate DTN node downloads (compute nodes have no internet)
 - **WRF Configuration**: Automated configure script execution
+- **WPS Configuration**: Automated configure script execution (requires compiled WRF)
 - **Module System**: Creates Lengau-compatible module files
 
 ### Key Features
 
-✅ **Automated Installation**: Single-command installation process  
+✅ **Automated Installation**: Single-command installation process for both WRF and WPS  
 ✅ **Cluster-Optimized**: Configured specifically for Lengau cluster architecture  
 ✅ **Error Handling**: Comprehensive error checking and informative messages  
 ✅ **Module System**: Creates Lengau-compatible module files  
 ✅ **Documentation**: Detailed troubleshooting and configuration guides  
+✅ **WPS Support**: Complete WPS installation with WRF dependency handling  
 
 ## 🔧 Prerequisites
 
@@ -58,7 +60,8 @@ The installation script automatically loads these modules, but ensure they're av
 
 ### Disk Space
 
-- **Source Code**: ~500 MB
+- **WRF Source Code**: ~500 MB
+- **WPS Source Code**: ~100 MB
 - **Build Directory**: ~5-10 GB
 - **Installation**: ~1 GB
 - **Total**: ~15 GB recommended
@@ -103,17 +106,46 @@ qsub -I -l select=1:ncpus=24:mpiprocs=24 -l walltime=08:00:00 -q normal
 # Navigate to installation directory
 cd /home/apps/chpc/earth/WRF-4.7.1
 
-# Run installation script
+# Run WRF installation script
 ./install_wrf_lengau.sh
 ```
 
 **Note**: WRF compilation can take 4-8 hours depending on system resources.
 
-### 4. Load WRF Module
+### 4. Download WPS Source (DTN Node)
+
+```bash
+# SSH to DTN node
+ssh msovara@dtn.chpc.ac.za
+
+# Navigate to installation directory
+cd /home/apps/chpc/earth/WRF-4.7.1
+
+# Copy and run WPS download script
+cp ~/wrf-lengau/download_wps_source.sh .
+chmod +x download_wps_source.sh
+./download_wps_source.sh
+```
+
+### 5. Install WPS (Compute Node)
+
+```bash
+# On compute node (after WRF is compiled)
+cd /home/apps/chpc/earth/WRF-4.7.1
+
+# Run WPS installation script
+./install_wps_lengau.sh
+```
+
+**Note**: WPS compilation typically takes 30-60 minutes. **WPS requires WRF to be compiled first!**
+
+### 6. Load WRF/WPS Module
 
 ```bash
 module load chpc/earth/wrf-lengau
 ```
+
+**See [INSTALL_WRF_WPS.md](INSTALL_WRF_WPS.md) for complete installation guide.**
 
 ## 📖 Installation Guide
 
@@ -139,8 +171,11 @@ wrf-lengau/
 ├── LICENSE                      # MIT License
 ├── CHANGELOG.md                 # Version history
 ├── CONTRIBUTING.md              # Contribution guidelines
-├── install_wrf_lengau.sh        # Main installation script
-├── download_wrf_source.sh       # Source download script
+├── install_wrf_lengau.sh        # WRF installation script
+├── install_wps_lengau.sh        # WPS installation script
+├── download_wrf_source.sh       # WRF source download script
+├── download_wps_source.sh       # WPS source download script
+├── INSTALL_WRF_WPS.md           # Combined installation guide
 ├── docs/                        # Documentation
 │   ├── INSTALLATION.md          # Detailed installation guide
 │   ├── CONFIGURATION.md         # Configuration options
