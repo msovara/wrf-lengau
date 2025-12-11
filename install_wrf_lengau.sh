@@ -377,35 +377,67 @@ export NETCDF
 printf "15\n1\n" | ./configure 2>&1 | tee configure.log
 CONFIGURE_EXIT=$?
 
-# Check configure.log for compiler test failures
-if grep -qi "One of compilers testing failed" configure.log 2>/dev/null || \
-   grep -qi "compiler.*failed" configure.log 2>/dev/null || \
-   grep -qi "could not checkout.*license" configure.log 2>/dev/null; then
+# Wait a moment for configure.wrf to be written
+sleep 1
+
+# CRITICAL: Check for compiler test failures FIRST, before checking configure.wrf
+# Even if configure.wrf is created, if compiler test failed, it's invalid
+if grep -qi "One of compilers testing failed" configure.log 2>/dev/null; then
     echo ""
     echo "✗ ERROR: Compiler test failed during configuration!"
     echo ""
-    echo "Common causes:"
-    echo "1. Intel compiler license not available"
-    echo "2. Compiler cannot compile test programs"
-    echo "3. Missing compiler dependencies"
+    echo "The configure script detected that the compilers cannot compile test programs."
+    echo "This usually means Intel compiler licenses are not available."
     echo ""
     echo "Checking configure.log for details..."
-    echo "--- Last 30 lines of configure.log ---"
-    tail -30 configure.log | grep -A 5 -B 5 -i "fail\|error\|license" || tail -30 configure.log
-    echo "--- End of configure.log excerpt ---"
+    echo "--- Relevant error messages from configure.log ---"
+    grep -i "One of compilers\|compiler.*failed\|license\|error" configure.log | tail -20
+    echo "--- End of error messages ---"
     echo ""
+    
+    # Remove invalid configure.wrf if it was created
+    if [ -f "configure.wrf" ]; then
+        echo "Removing invalid configure.wrf file..."
+        rm -f configure.wrf
+    fi
+    
     echo "SOLUTIONS:"
-    echo "1. Check Intel license server:"
-    echo "   - Contact cluster admin if licenses are unavailable"
-    echo "   - Try again later if licenses are temporarily exhausted"
+    echo "1. Intel compiler licenses are not available:"
+    echo "   - Wait 10-15 minutes and try again (licenses may be temporarily exhausted)"
+    echo "   - Contact cluster admin: licenses may need to be restarted"
+    echo "   - Check license server: ls -la /apps/compilers/intel/licenses/chpc.lic"
     echo ""
-    echo "2. Verify compilers work manually:"
-    echo "   ifort -V 2>&1 | head -1"
-    echo "   icc -V 2>&1 | head -1"
+    echo "2. Verify compilers work manually (requires license):"
+    echo "   ifort --version"
+    echo "   icc --version"
     echo ""
-    echo "3. If licenses are permanently unavailable, consider:"
-    echo "   - Using GCC compilers (option 34 for dmpar GNU)"
-    echo "   - Contacting cluster admin for license access"
+    echo "3. If Intel licenses are permanently unavailable:"
+    echo "   - Consider using GCC compilers (requires different NetCDF modules)"
+    echo "   - See docs/INTEL_LICENSE_ERROR.md for GCC compilation instructions"
+    echo ""
+    echo "4. Contact CHPC support for Intel compiler license access"
+    echo ""
+    exit 1
+fi
+
+# Check for other compiler-related failures
+if grep -qi "compiler.*failed\|could not checkout.*license" configure.log 2>/dev/null; then
+    echo ""
+    echo "✗ ERROR: Compiler-related failure detected in configure.log"
+    echo ""
+    echo "--- Error messages ---"
+    grep -i "compiler.*failed\|license\|error" configure.log | tail -10
+    echo "--- End of errors ---"
+    echo ""
+    
+    # Remove invalid configure.wrf if it was created
+    if [ -f "configure.wrf" ]; then
+        echo "Removing invalid configure.wrf file..."
+        rm -f configure.wrf
+    fi
+    
+    echo "This is likely due to Intel compiler license issues."
+    echo "Please wait and retry, or contact cluster administrator."
     echo ""
     exit 1
 fi
@@ -414,18 +446,28 @@ fi
 if [ ! -f "configure.wrf" ]; then
     echo "⚠ Configure with option 15 did not create configure.wrf"
     echo "Checking configure.log for errors..."
-    if grep -qi "One of compilers testing failed" configure.log 2>/dev/null; then
-        echo "✗ Compiler test failed - configure.wrf not created"
-        echo "This is likely due to Intel license issues"
-        exit 1
-    fi
+    echo "--- Last 20 lines of configure.log ---"
+    tail -20 configure.log
+    echo "--- End of configure.log ---"
+    echo ""
     echo "Trying option 35..."
     printf "35\n1\n" | ./configure 2>&1 | tee -a configure.log
     CONFIGURE_EXIT=$?
+    sleep 1
     
     # Check again for compiler failures
     if grep -qi "One of compilers testing failed" configure.log 2>/dev/null; then
         echo "✗ Compiler test failed with option 35 as well"
+        if [ -f "configure.wrf" ]; then
+            rm -f configure.wrf
+        fi
+        exit 1
+    fi
+    
+    # Final check
+    if [ ! -f "configure.wrf" ]; then
+        echo "✗ Configure failed with both options 15 and 35"
+        echo "Please check configure.log for details"
         exit 1
     fi
 fi
@@ -475,8 +517,30 @@ echo ""
 
 # Ensure we're in the WRF source directory
 cd ${BUILD_DIR}/WRF
+
+# Double-check configure.wrf exists and is valid
 if [ ! -f "configure.wrf" ]; then
     echo "✗ ERROR: configure.wrf not found in ${BUILD_DIR}/WRF"
+    echo "Current directory: $(pwd)"
+    echo "Files in current directory:"
+    ls -la configure* 2>/dev/null || echo "No configure files found"
+    echo ""
+    echo "This usually means configuration failed."
+    echo "Please check configure.log for errors."
+    exit 1
+fi
+
+# Verify configure.wrf is not empty and contains valid content
+if [ ! -s "configure.wrf" ]; then
+    echo "✗ ERROR: configure.wrf exists but is empty"
+    echo "Configuration failed. Please check configure.log"
+    exit 1
+fi
+
+# Check if configure.wrf contains compiler settings (basic validation)
+if ! grep -q "SFC.*=" configure.wrf 2>/dev/null; then
+    echo "✗ ERROR: configure.wrf appears to be invalid (missing compiler settings)"
+    echo "Configuration may have failed. Please check configure.log"
     exit 1
 fi
 
