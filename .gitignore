@@ -1,0 +1,32 @@
+# Build artifacts
+*.o
+*.mod
+*.a
+*.so
+*.exe
+
+# Log files
+*.log
+*.out
+*.err
+
+# Temporary files
+*.tmp
+*.bak
+*~
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Cluster-specific
+install_log.txt
+configure.log
+compile.log
+
