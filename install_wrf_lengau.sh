@@ -262,21 +262,51 @@ echo ""
 # Verify Intel compilers
 echo "Verifying Intel compilers..."
 if command -v ifort &> /dev/null; then
-    echo "✓ Intel Fortran: $(ifort --version | head -1)"
+    # Test if compiler can actually compile (requires license)
+    if ifort --version &>/dev/null; then
+        echo "✓ Intel Fortran: $(ifort --version 2>&1 | head -1)"
+    else
+        echo "✗ Intel Fortran found but cannot run (license issue?)"
+        echo "  Error: $(ifort --version 2>&1 | head -3)"
+        echo ""
+        echo "ERROR: Intel compiler license not available!"
+        echo "Please:"
+        echo "1. Check if Intel license server is running"
+        echo "2. Wait for licenses to become available"
+        echo "3. Contact cluster administrator"
+        echo "4. Or consider using GCC compilers (requires different configuration)"
+        exit 1
+    fi
 else
     echo "✗ Intel Fortran not found"
     exit 1
 fi
 
 if command -v icc &> /dev/null; then
-    echo "✓ Intel C: $(icc --version | head -1)"
+    if icc --version &>/dev/null; then
+        echo "✓ Intel C: $(icc --version 2>&1 | head -1)"
+    else
+        echo "✗ Intel C found but cannot run (license issue?)"
+        echo "  Error: $(icc --version 2>&1 | head -3)"
+        echo ""
+        echo "ERROR: Intel compiler license not available!"
+        exit 1
+    fi
 else
     echo "✗ Intel C not found"
     exit 1
 fi
 
 if command -v icpc &> /dev/null; then
-    echo "✓ Intel C++: $(icpc --version | head -1)"
+    if icpc --version &>/dev/null; then
+        echo "✓ Intel C++: $(icpc --version 2>&1 | head -1)"
+    else
+        echo "✗ Intel C++ found but cannot run (license issue?)"
+        echo "  Error: $(icpc --version 2>&1 | head -3)"
+        echo ""
+        echo "ERROR: Intel compiler license not available!"
+        exit 1
+    fi
 else
     echo "✗ Intel C++ not found"
     exit 1
@@ -347,17 +377,68 @@ export NETCDF
 printf "15\n1\n" | ./configure 2>&1 | tee configure.log
 CONFIGURE_EXIT=$?
 
+# Check configure.log for compiler test failures
+if grep -qi "One of compilers testing failed" configure.log 2>/dev/null || \
+   grep -qi "compiler.*failed" configure.log 2>/dev/null || \
+   grep -qi "could not checkout.*license" configure.log 2>/dev/null; then
+    echo ""
+    echo "✗ ERROR: Compiler test failed during configuration!"
+    echo ""
+    echo "Common causes:"
+    echo "1. Intel compiler license not available"
+    echo "2. Compiler cannot compile test programs"
+    echo "3. Missing compiler dependencies"
+    echo ""
+    echo "Checking configure.log for details..."
+    echo "--- Last 30 lines of configure.log ---"
+    tail -30 configure.log | grep -A 5 -B 5 -i "fail\|error\|license" || tail -30 configure.log
+    echo "--- End of configure.log excerpt ---"
+    echo ""
+    echo "SOLUTIONS:"
+    echo "1. Check Intel license server:"
+    echo "   - Contact cluster admin if licenses are unavailable"
+    echo "   - Try again later if licenses are temporarily exhausted"
+    echo ""
+    echo "2. Verify compilers work manually:"
+    echo "   ifort -V 2>&1 | head -1"
+    echo "   icc -V 2>&1 | head -1"
+    echo ""
+    echo "3. If licenses are permanently unavailable, consider:"
+    echo "   - Using GCC compilers (option 34 for dmpar GNU)"
+    echo "   - Contacting cluster admin for license access"
+    echo ""
+    exit 1
+fi
+
 # Check if configure.wrf was actually created
 if [ ! -f "configure.wrf" ]; then
-    echo "⚠ Configure with option 15 did not create configure.wrf, trying option 35..."
+    echo "⚠ Configure with option 15 did not create configure.wrf"
+    echo "Checking configure.log for errors..."
+    if grep -qi "One of compilers testing failed" configure.log 2>/dev/null; then
+        echo "✗ Compiler test failed - configure.wrf not created"
+        echo "This is likely due to Intel license issues"
+        exit 1
+    fi
+    echo "Trying option 35..."
     printf "35\n1\n" | ./configure 2>&1 | tee -a configure.log
     CONFIGURE_EXIT=$?
+    
+    # Check again for compiler failures
+    if grep -qi "One of compilers testing failed" configure.log 2>/dev/null; then
+        echo "✗ Compiler test failed with option 35 as well"
+        exit 1
+    fi
 fi
 
 # Final check
 if [ ! -f "configure.wrf" ]; then
     echo "✗ Configure failed - configure.wrf not created"
     echo "Exit code: ${CONFIGURE_EXIT}"
+    echo ""
+    echo "--- Checking configure.log for errors ---"
+    tail -50 configure.log | grep -i "fail\|error\|license" || tail -50 configure.log
+    echo "--- End of error check ---"
+    echo ""
     echo "Please check configure.log for details"
     echo ""
     echo "You may need to run configure interactively:"
@@ -367,10 +448,9 @@ if [ ! -f "configure.wrf" ]; then
     exit 1
 fi
 
-# Check if configure was successful
-if [ ! -f "configure.wrf" ]; then
-    echo "✗ configure.wrf not created. Configure may have failed."
-    echo "Please check configure.log for details"
+# Verify configure.wrf is valid (not empty)
+if [ ! -s "configure.wrf" ]; then
+    echo "✗ configure.wrf exists but is empty - configuration failed"
     exit 1
 fi
 
